@@ -55,6 +55,7 @@ export function DetectionDisplay({ src, detections, type }: DetectionDisplayProp
     });
   };
 
+  // Render video player if type is video
   if (type === 'video') {
     return (
       <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black">
@@ -65,7 +66,7 @@ export function DetectionDisplay({ src, detections, type }: DetectionDisplayProp
         )}
         <video
           ref={videoRef}
-          key={src} // Force remount when src changes
+          key={src}
           src={src}
           className="w-full h-auto rounded-lg"
           controls
@@ -88,14 +89,11 @@ export function DetectionDisplay({ src, detections, type }: DetectionDisplayProp
     );
   }
 
+  // For images, use canvas rendering
   useEffect(() => {
-    if (type === 'video') {
-      return; // Skip canvas handling for videos
-    }
-
     const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (!canvas || !container || !src) return;
+    if (!canvas || !container || !src || type !== 'image') return;
 
     const context = canvas.getContext('2d');
     if (!context) return;
@@ -162,12 +160,12 @@ export function DetectionDisplay({ src, detections, type }: DetectionDisplayProp
 
     img.src = src;
 
-    // Cleanup
     return () => {
       img.onload = null;
     };
   }, [src, detections, dimensions, type]);
 
+  // Render canvas for images
   return (
     <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black">
       <canvas

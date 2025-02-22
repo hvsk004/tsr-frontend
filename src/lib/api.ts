@@ -22,7 +22,11 @@ export async function uploadMedia(file: File, options: PredictOptions = {}): Pro
   formData.append('conf_threshold', (options.confidenceThreshold || 0.6).toString());
   formData.append('debug', (options.debug || false).toString());
 
-  console.log('Uploading file:', file.name);
+  console.log('Uploading file:', {
+    name: file.name,
+    type: file.type,
+    size: file.size
+  });
 
   const response = await fetch(`${config.apiUrl}/predict`, {
     method: 'POST',
@@ -40,31 +44,34 @@ export async function uploadMedia(file: File, options: PredictOptions = {}): Pro
   const disposition = response.headers.get('content-disposition');
   const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
   const filename = filenameMatch ? filenameMatch[1] : '';
-
-  // Get response data as ArrayBuffer to properly handle binary data
-  const arrayBuffer = await response.arrayBuffer();
   const isVideo = filename.toLowerCase().endsWith('.mp4') || contentType?.includes('video');
 
-  // Create blob with proper MIME type and encoding
-  const blob = new Blob([arrayBuffer], { 
-    type: isVideo ? 'video/mp4; codecs="avc1.42E01E,mp4a.40.2"' : 'image/jpeg' 
-  });
+  // Get binary data
+  const buffer = await response.arrayBuffer();
 
-  // Create URL for the blob
+  // Create the appropriate blob type
+  let blob: Blob;
+  if (isVideo) {
+    blob = new Blob([buffer], {
+      type: 'video/mp4'
+    });
+    console.log('Created video blob:', {
+      size: blob.size,
+      type: blob.type,
+      contentType,
+      filename
+    });
+  } else {
+    blob = new Blob([buffer], {
+      type: contentType || 'image/jpeg'
+    });
+  }
+
   const url = URL.createObjectURL(blob);
-
-  console.log('Created media URL:', {
-    type: isVideo ? 'video' : 'image',
-    blobSize: blob.size,
-    url,
-    mimeType: blob.type,
-    filename,
-    contentType
-  });
 
   return { 
     blob, 
-    type: isVideo ? 'video' : 'image', 
+    type: isVideo ? 'video' : 'image',
     url 
   };
 }
