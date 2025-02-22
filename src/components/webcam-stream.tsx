@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { wsClient } from '@/lib/websocket';
-import { DetectionDisplay } from './detection-display';
 import { Button } from '@/components/ui/button';
 import { Camera, CameraOff } from 'lucide-react';
+import { Alert } from '@/components/ui/alert';
 import { DetectionResult } from '@/lib/types';
 
 interface WebcamStreamProps {
@@ -14,10 +14,18 @@ export function WebcamStream({ onDetections }: WebcamStreamProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
+      });
+
       if (videoRef.current && canvasRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -26,16 +34,18 @@ export function WebcamStream({ onDetections }: WebcamStreamProps) {
         wsClient.connect((data) => {
           if (data.type === 'detection') {
             onDetections(data.data as DetectionResult[]);
+          } else if (data.type === 'error') {
+            setError(data.data as string);
           }
         });
 
-        // Start sending frames after video is ready
         videoRef.current.onloadedmetadata = () => {
           sendFrames();
         };
       }
     } catch (error) {
       console.error('Error accessing webcam:', error);
+      setError('Could not access webcam. Please ensure you have granted camera permissions.');
     }
   };
 
@@ -45,6 +55,7 @@ export function WebcamStream({ onDetections }: WebcamStreamProps) {
       streamRef.current = null;
       setIsStreaming(false);
       wsClient.disconnect();
+      setError(null);
     }
   };
 
@@ -54,18 +65,13 @@ export function WebcamStream({ onDetections }: WebcamStreamProps) {
     const context = canvasRef.current.getContext('2d');
     if (!context) return;
 
-    // Set canvas size to match video
     canvasRef.current.width = videoRef.current.videoWidth;
     canvasRef.current.height = videoRef.current.videoHeight;
 
-    // Draw current video frame to canvas
     context.drawImage(videoRef.current, 0, 0);
-
-    // Convert canvas to base64 and send to server
     const frame = canvasRef.current.toDataURL('image/jpeg', 0.8).split(',')[1];
     wsClient.sendFrame(frame);
 
-    // Schedule next frame
     if (isStreaming) {
       requestAnimationFrame(sendFrames);
     }
@@ -97,6 +103,13 @@ export function WebcamStream({ onDetections }: WebcamStreamProps) {
           )}
         </Button>
       </div>
+
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          {error}
+        </Alert>
+      )}
+
       <div className="relative rounded-lg overflow-hidden">
         <video
           ref={videoRef}

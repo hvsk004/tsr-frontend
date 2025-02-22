@@ -10,8 +10,9 @@ export interface DetectionResult {
 }
 
 export interface WebSocketMessage {
-  type: 'detection' | 'error';
+  type: 'detection' | 'error' | 'frame';
   data: DetectionResult[] | string;
+  hasDetections?: boolean;
 }
 
 export type UploadMode = 'image' | 'video' | 'webcam';
