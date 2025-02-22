@@ -91,27 +91,45 @@ export function Dashboard() {
       setIsUploading(true);
       cleanupMedia(); // Cleanup previous media
 
-      toast({
-        title: 'Processing Media',
-        description: 'Please wait while we process your file...',
+      console.log('Uploading file:', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: new Date(file.lastModified).toISOString()
       });
 
-      console.log('Starting file upload:', file.name);
       const response = await uploadMedia(file, {
         mode: 'both',
         confidenceThreshold: 0.6,
         debug: false
       });
 
-      console.log('Received response:', response.type);
-
-      // Set the media source from the response URL
-      setMediaSource(response.url);
-
-      // Update selected mode if needed
-      if (selectedMode !== response.type) {
-        setSelectedMode(response.type === 'video' ? 'video' : 'image');
+      // For video files, create a new blob with explicit MIME type
+      if (response.type === 'video') {
+        const videoBlob = new Blob([response.blob], {
+          type: 'video/mp4'
+        });
+        
+        // Revoke old URL if it exists
+        if (mediaSource) {
+          URL.revokeObjectURL(mediaSource);
+        }
+        
+        const newUrl = URL.createObjectURL(videoBlob);
+        console.log('Created video URL:', {
+          originalType: response.blob.type,
+          newType: videoBlob.type,
+          size: videoBlob.size,
+          url: newUrl
+        });
+        
+        setMediaSource(newUrl);
+      } else {
+        setMediaSource(response.url);
       }
+
+      // Update selected mode
+      setSelectedMode(response.type);
 
       toast({
         title: 'Success',
@@ -452,7 +470,7 @@ export function Dashboard() {
                 type="file"
                 accept={selectedMode === 'image' 
                   ? 'image/jpeg,image/png,image/jpg' 
-                  : 'video/mp4,video/webm,video/ogg'}
+                  : 'video/mp4,video/quicktime,video/x-msvideo'}
                 onChange={handleFileUpload}
                 disabled={isUploading}
                 className="hidden"
@@ -473,9 +491,9 @@ export function Dashboard() {
                       : `Drop your ${selectedMode} here or click to upload`}
                   </p>
                   <p className="text-sm md:text-base lg:text-lg text-muted-foreground">
-                    Supported formats: {selectedMode === 'image' 
-                      ? 'PNG, JPG, JPEG' 
-                      : 'MP4, WebM'}
+                    {selectedMode === 'image' 
+                      ? 'Supported formats: PNG, JPG, JPEG' 
+                      : 'Supported formats: MP4 (recommended), MOV, AVI'}
                   </p>
                 </div>
               </label>

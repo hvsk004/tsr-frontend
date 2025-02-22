@@ -9,10 +9,90 @@ interface DetectionDisplayProps {
 
 export function DetectionDisplay({ src, detections, type }: DetectionDisplayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [dimensions, setDimensions] = useState({ width: 640, height: 480 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('DetectionDisplay mounted:', {
+      type,
+      src,
+      hasDetections: detections?.length > 0
+    });
+
+    // For videos, log when the source changes
+    if (type === 'video' && videoRef.current) {
+      console.log('Setting video source:', src);
+      videoRef.current.src = src;
+    }
+
+    return () => {
+      if (type === 'video' && videoRef.current) {
+        videoRef.current.src = '';
+      }
+    };
+  }, [src, type]);
+
+  // Handle video loading events
+  const handleVideoLoad = () => {
+    console.log('Video loaded successfully');
+    setVideoError(null);
+  };
+
+  // Video error handler
+  const handleVideoError = (error: any) => {
+    const videoElement = videoRef.current;
+    setVideoError(error?.message || 'Video playback error');
+    console.error('Video playback error:', {
+      error,
+      videoElement: {
+        readyState: videoElement?.readyState,
+        networkState: videoElement?.networkState,
+        error: videoElement?.error,
+        src: videoElement?.src
+      }
+    });
+  };
+
+  if (type === 'video') {
+    return (
+      <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black">
+        {videoError && (
+          <div className="absolute top-0 left-0 right-0 bg-red-500 text-white p-2 text-sm">
+            {videoError}
+          </div>
+        )}
+        <video
+          ref={videoRef}
+          key={src} // Force remount when src changes
+          src={src}
+          className="w-full h-auto rounded-lg"
+          controls
+          preload="auto"
+          playsInline
+          crossOrigin="anonymous"
+          style={{ display: videoError ? 'none' : 'block' }}
+          onError={handleVideoError}
+          onLoadedData={handleVideoLoad}
+        >
+          <source src={src} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+        {videoError && (
+          <div className="w-full h-[300px] bg-gray-800 flex items-center justify-center text-white">
+            Failed to load video: {videoError}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  useEffect(() => {
+    if (type === 'video') {
+      return; // Skip canvas handling for videos
+    }
+
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container || !src) return;
@@ -86,7 +166,7 @@ export function DetectionDisplay({ src, detections, type }: DetectionDisplayProp
     return () => {
       img.onload = null;
     };
-  }, [src, detections, dimensions]);
+  }, [src, detections, dimensions, type]);
 
   return (
     <div ref={containerRef} className="relative w-full rounded-lg overflow-hidden bg-black">

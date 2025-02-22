@@ -27,7 +27,6 @@ export async function uploadMedia(file: File, options: PredictOptions = {}): Pro
   const response = await fetch(`${config.apiUrl}/predict`, {
     method: 'POST',
     body: formData,
-    // Add credentials to handle CORS properly
     credentials: 'include'
   });
 
@@ -36,57 +35,38 @@ export async function uploadMedia(file: File, options: PredictOptions = {}): Pro
     throw new Error(`Failed to upload media: ${errorText}`);
   }
 
-  // Get response headers and body
+  // Get response headers
   const contentType = response.headers.get('content-type');
   const disposition = response.headers.get('content-disposition');
   const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
   const filename = filenameMatch ? filenameMatch[1] : '';
 
-  console.log('Response headers:', {
-    contentType,
-    disposition,
-    filename
-  });
-
-  // Determine if it's a video based on content type or filename
+  // Get response data as ArrayBuffer to properly handle binary data
+  const arrayBuffer = await response.arrayBuffer();
   const isVideo = filename.toLowerCase().endsWith('.mp4') || contentType?.includes('video');
 
-  // For videos, we need to ensure proper MIME type and codec support
-  if (isVideo) {
-    // Get the video data as an array buffer
-    const videoData = await response.arrayBuffer();
-    console.log('Received video data size:', videoData.byteLength);
+  // Create blob with proper MIME type and encoding
+  const blob = new Blob([arrayBuffer], { 
+    type: isVideo ? 'video/mp4; codecs="avc1.42E01E,mp4a.40.2"' : 'image/jpeg' 
+  });
 
-    // Create a blob with the proper MIME type for H.264 video
-    const blob = new Blob([videoData], { 
-      type: 'video/mp4; codecs="avc1.42E01E"'
-    });
+  // Create URL for the blob
+  const url = URL.createObjectURL(blob);
 
-    // Create a URL for the blob
-    const url = URL.createObjectURL(blob);
+  console.log('Created media URL:', {
+    type: isVideo ? 'video' : 'image',
+    blobSize: blob.size,
+    url,
+    mimeType: blob.type,
+    filename,
+    contentType
+  });
 
-    console.log('Created video URL:', {
-      type: 'video',
-      blobSize: blob.size,
-      url,
-      mimeType: blob.type
-    });
-
-    return { blob, type: 'video', url };
-  } else {
-    // Handle images as before
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-
-    console.log('Created image URL:', {
-      type: 'image',
-      blobSize: blob.size,
-      url,
-      mimeType: blob.type
-    });
-
-    return { blob, type: 'image', url };
-  }
+  return { 
+    blob, 
+    type: isVideo ? 'video' : 'image', 
+    url 
+  };
 }
 
 // Function to handle WebSocket connection for live webcam predictions
