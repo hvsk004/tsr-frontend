@@ -1,7 +1,10 @@
 import { Card, CardContent } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
 import { Badge } from "./ui/badge";
+import { Switch } from "./ui/switch";
+import { Label } from "./ui/label";
 import { Detection } from "@/lib/types";
+import { useEffect, useState } from "react";
 
 interface DetectionDisplayProps {
   imageUrl?: string;
@@ -14,6 +17,7 @@ interface DetectionDisplayProps {
 }
 
 export function DetectionDisplay({ imageUrl, videoUrl, detectionResults, type = 'image' }: DetectionDisplayProps) {
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const mediaUrl = type === 'image' ? imageUrl : videoUrl;
   
   if (!mediaUrl) return null;
@@ -25,6 +29,18 @@ export function DetectionDisplay({ imageUrl, videoUrl, detectionResults, type = 
         return acc;
       }, {} as Record<string, number>)
     : {};
+
+  // Voice announcement effect
+  useEffect(() => {
+    if (type === 'image' && voiceEnabled && detectionResults?.has_detections && Object.keys(labelCounts).length > 0) {
+      const text = `Detected traffic signs: ${Object.entries(labelCounts)
+        .map(([label, count]) => `${count > 1 ? count : 'a'} ${label}${count > 1 ? 's' : ''}`)
+        .join(', ')}`;
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      window.speechSynthesis.speak(utterance);
+    }
+  }, [detectionResults, voiceEnabled, type]);
 
   return (
     <div className="container mx-auto p-4 space-y-4">
@@ -42,8 +58,18 @@ export function DetectionDisplay({ imageUrl, videoUrl, detectionResults, type = 
       {/* Detection results - Enhanced display for image mode */}
       {type === 'image' && detectionResults?.has_detections && detectionResults.detections.length > 0 && (
         <Card>
-          <CardContent className="p-4">
-            <h3 className="text-lg font-semibold mb-2">Detected Traffic Signs</h3>
+          <CardContent className="p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Detected Traffic Signs</h3>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="voice-mode"
+                  checked={voiceEnabled}
+                  onCheckedChange={setVoiceEnabled}
+                />
+                <Label htmlFor="voice-mode">Voice Announcements</Label>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               {Object.entries(labelCounts).map(([label, count]) => (
                 <Badge 
