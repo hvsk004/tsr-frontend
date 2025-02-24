@@ -91,17 +91,24 @@ export function Dashboard() {
       setIsUploading(true);
       cleanupMedia(); // Cleanup previous media
 
-      console.log('Uploading file:', {
+      console.log('[Debug] Starting file upload:', {
         name: file.name,
         type: file.type,
         size: file.size,
-        lastModified: new Date(file.lastModified).toISOString()
+        mode: selectedMode
       });
 
       const response = await uploadMedia(file, {
         mode: 'both',
         confidenceThreshold: 0.6,
         debug: false
+      });
+
+      console.log('[Debug] Upload response:', {
+        type: response.type,
+        hasDetections: response.detectionResults?.has_detections,
+        detectionsCount: response.detectionResults?.detections?.length,
+        detections: response.detectionResults?.detections
       });
 
       // For video files, create a new blob with explicit MIME type
@@ -126,6 +133,27 @@ export function Dashboard() {
         setMediaSource(newUrl);
       } else {
         setMediaSource(response.url);
+        // Convert Detection[] to DetectionResult[] for image mode
+        if (response.detectionResults) {
+          const convertedDetections = response.detectionResults.detections.map(d => ({
+            boundingBox: {
+              x: d.box[0],
+              y: d.box[1],
+              width: d.box[2] - d.box[0],
+              height: d.box[3] - d.box[1]
+            },
+            class: d.label,
+            confidence: d.confidence
+          }));
+          console.log('[Debug] Converted detections:', {
+            original: response.detectionResults.detections,
+            converted: convertedDetections
+          });
+          setDetections(convertedDetections);
+        } else {
+          console.log('[Debug] No detection results in response');
+          setDetections([]);
+        }
       }
 
       // Update selected mode
@@ -432,9 +460,18 @@ export function Dashboard() {
                   </h3>
                   {mediaSource ? (
                     <DetectionDisplay
-                      src={mediaSource}
-                      detections={detections}
-                      type="image"  // Change this to "image" since we're receiving individual frames
+                      imageUrl={mediaSource}
+                      detectionResults={detections.length > 0 ? {
+                        has_detections: true,
+                        detections: detections.map(d => ({
+                          box: [d.boundingBox.x, d.boundingBox.y, 
+                               d.boundingBox.x + d.boundingBox.width, 
+                               d.boundingBox.y + d.boundingBox.height],
+                          label: d.class,
+                          confidence: d.confidence
+                        }))
+                      } : undefined}
+                      type="image"
                     />
                   ) : (
                     <div className="w-full h-[300px] bg-gray-100 rounded-lg flex items-center justify-center">
@@ -499,11 +536,21 @@ export function Dashboard() {
               </label>
 
               {mediaSource && (
-                <div className="relative">
+                <div className="relative space-y-4">
                   <DetectionDisplay
-                    src={mediaSource}
-                    detections={detections}
-                    type={selectedMode === 'image' ? 'image' : 'video'}
+                    imageUrl={selectedMode === 'image' ? mediaSource : undefined}
+                    videoUrl={selectedMode === 'video' ? mediaSource : undefined}
+                    detectionResults={detections.length > 0 ? {
+                      has_detections: true,
+                      detections: detections.map(d => ({
+                        box: [d.boundingBox.x, d.boundingBox.y, 
+                             d.boundingBox.x + d.boundingBox.width, 
+                             d.boundingBox.y + d.boundingBox.height],
+                        label: d.class,
+                        confidence: d.confidence
+                      }))
+                    } : undefined}
+                    type={selectedMode}
                   />
                 </div>
               )}

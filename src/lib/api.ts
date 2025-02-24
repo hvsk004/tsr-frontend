@@ -1,6 +1,6 @@
 // src/lib/api.ts
 import { config } from './config';
-import { WebSocketMessage } from './types';
+import { WebSocketMessage, Detection } from './types';
 
 interface PredictOptions {
   mode?: 'gtsdb' | 'gtsrb' | 'both';
@@ -12,6 +12,10 @@ export interface PredictResponse {
   blob: Blob;
   type: 'image' | 'video';
   url: string;
+  detectionResults?: {
+    has_detections: boolean;
+    detections: Detection[];
+  };
 }
 
 // Function to upload media (image or video)
@@ -22,10 +26,13 @@ export async function uploadMedia(file: File, options: PredictOptions = {}): Pro
   formData.append('conf_threshold', (options.confidenceThreshold || 0.6).toString());
   formData.append('debug', (options.debug || false).toString());
 
-  console.log('Uploading file:', {
+  console.log('[Debug] Uploading file:', {
     name: file.name,
     type: file.type,
-    size: file.size
+    size: file.size,
+    mode: options.mode,
+    confidenceThreshold: options.confidenceThreshold,
+    debug: options.debug
   });
 
   const response = await fetch(`${config.apiUrl}/predict`, {
@@ -39,41 +46,90 @@ export async function uploadMedia(file: File, options: PredictOptions = {}): Pro
     throw new Error(`Failed to upload media: ${errorText}`);
   }
 
+  // Log all response headers for debugging
+  const headers = Object.fromEntries([...response.headers.entries()]);
+  console.log('[Debug] Full response details:', {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+    url: response.url
+  });
+
   // Get response headers
   const contentType = response.headers.get('content-type');
   const disposition = response.headers.get('content-disposition');
   const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
-  const filename = filenameMatch ? filenameMatch[1] : '';
-  const isVideo = filename.toLowerCase().endsWith('.mp4') || contentType?.includes('video');
+  const filename = filenameMatch?.[1] || '';
+  const isVideo = (filename && filename.toLowerCase().endsWith('.mp4')) || contentType?.includes('video');
 
   // Get binary data
   const buffer = await response.arrayBuffer();
-
+  
   // Create the appropriate blob type
-  let blob: Blob;
+  const blob = isVideo 
+    ? new Blob([buffer], { type: 'video/mp4' })
+    : new Blob([buffer], { type: contentType || 'image/jpeg' });
+
   if (isVideo) {
-    blob = new Blob([buffer], {
-      type: 'video/mp4'
-    });
-    console.log('Created video blob:', {
+    console.log('[Debug] Created video blob:', {
       size: blob.size,
       type: blob.type,
       contentType,
       filename
     });
-  } else {
-    blob = new Blob([buffer], {
-      type: contentType || 'image/jpeg'
-    });
   }
 
-  const url = URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
+  
+  // Get detection results from header for image mode only
+  let detectionResults: PredictResponse['detectionResults'] | undefined;
+  if (!isVideo) {
+    // Try both cases since headers should be case-insensitive
+    const detectionHeader = 
+      response.headers.get('x-detection-results') || 
+      response.headers.get('X-Detection-Results');
+    
+    console.log('[Debug] Detection header details:', {
+      headerValue: detectionHeader,
+      allHeaders: headers,
+      headerKeys: [...response.headers.keys()],
+      hasHeader: response.headers.has('x-detection-results'),
+      hasUpperHeader: response.headers.has('X-Detection-Results')
+    });
+    
+    if (detectionHeader) {
+      try {
+        detectionResults = JSON.parse(detectionHeader);
+        console.log('[Debug] Successfully parsed detection results:', {
+          hasDetections: detectionResults?.has_detections,
+          detectionsCount: detectionResults?.detections?.length,
+          fullResults: detectionResults
+        });
+      } catch (error) {
+        console.error('[Debug] Failed to parse detection results:', {
+          error,
+          headerValue: detectionHeader,
+          responseStatus: response.status,
+          responseStatusText: response.statusText
+        });
+      }
+    } else {
+      console.warn('[Debug] No detection header found. Headers available:', 
+        [...response.headers.keys()].join(', ')
+      );
+    }
+  }
 
-  return { 
+  const result: PredictResponse = { 
     blob, 
     type: isVideo ? 'video' : 'image',
-    url 
+    url: objectUrl,
+    detectionResults
   };
+
+  console.log('[Debug] Returning upload result:', result);
+
+  return result;
 }
 
 // Function to handle WebSocket connection for live webcam predictions
@@ -89,7 +145,7 @@ export function createWebSocketConnection(
     fullUrl: wsUrl,
     envVar: import.meta.env.VITE_WS_URL
   });
-  
+
   const ws = new WebSocket(wsUrl);
   ws.binaryType = 'arraybuffer';
 
@@ -110,7 +166,7 @@ export function createWebSocketConnection(
         try {
           const data = JSON.parse(event.data);
           console.log('Parsed WebSocket data:', data);
-          
+
           // First send frame data
           if (data.image) {
             onMessage({
