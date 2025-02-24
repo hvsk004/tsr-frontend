@@ -62,8 +62,7 @@ export function About() {
 
         <div className="w-[95%] rounded-lg overflow-hidden">
           <img
-            src="https://images.unsplash.com/photo-1589648751789-c8949118c327?auto=format&fit=crop&q=80&w=2000"
-            alt="Traffic Technology"
+            src="https://images.pexels.com/photos/39943/pexels-photo-39943.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             className="w-full aspect-[21/9] object-cover rounded-lg"
           />
         </div>
