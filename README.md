@@ -1,3 +1,4 @@
+
 # Traffic Sign Recognition Web Application
 
 A modern web application for real-time traffic sign detection and recognition using React, TypeScript, and WebSocket communication.
@@ -43,7 +44,7 @@ A modern web application for real-time traffic sign detection and recognition us
 
 1. Clone the repository:
 ```bash
-git clone [https://github.com/yourusername/tsr-frontend.git](https://github.com/hvsk004/tsr-frontend)
+git clone https://github.com/hvsk004/tsr-frontend
 cd tsr-frontend
 ```
 
